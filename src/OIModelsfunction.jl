@@ -25,7 +25,6 @@
 """
 function imagingdata(M::Model,tabuv,pixsize,N)
 
-    
     u = tabuv[1,:,:] .|>u"mas^-1"
     v = tabuv[2,:,:] .|>u"mas^-1"
     uv = vcat(reshape(v,1,:),reshape(u,1,:)) .* pixsize .|> NoUnits
@@ -106,43 +105,68 @@ function imaginguv(M::Model,pixsize,N)
 end
 
 
-function findobject(M::Star,donnees,intervalle,uv)
+function findimg(M::Star,donnees,intervalle,uv)
     v, re = destructure(M)
-    for i in p1:p2
-        v[1]=i*u"mas"
-        for j in p1:p2    
-            v[2]=j*u"mas"
-            if length(v)==3
-                for k in p1:p2
-                    v[3]=abs(k*u"mas")
-                    M=re(v)
-                    if interferometry_fourier(M,uv)==donnees
-                        return M
-                    end
-                end
-            else
+    I=length(intervalle)
+    img = zeros(Float64, I, I)
+    T=Vector{Float64}()
+        for x in intervalle
+            v[1]=x*u"mas"
+            t=0
+            for y in intervalle   
+                v[2]=y*u"mas"
                 M=re(v)
-                if interferometry_fourier(M,uv)==donnees
-                    return M
-                end
+                t=sum(abs2,interferometry_fourier(M,uv).-donnees)
+                push!(T,t)
+            end    
+        end 
+    for idx in eachindex(img)
+        img[idx]=T[idx]
+    end
+    return img
+end
+
+function findobj(img)
+    min=minimum(img)
+    vect=[]
+    x=length(img[:,1])
+    y=length(img[1,:])
+    for i in 1:x
+        for j in 1:y
+            if img[i,j]==min
+                vect=[(j-y/2)*u"mas",(i-x/2)*u"mas"]
+                return vect
             end
         end
     end
-    return "L'objet ne se trouve pas dans la plage de position implémentée"
 end
-    
-function finddisk(M::Disk,donnees,intervalle,uv)
+
+#= 
+function findimg(M::Disk,donnees,intervalle,uv)
     v, re = destructure(M)
-    for i in p1:p2
-        v[1]=i*u"mas"
-        for j in p1:p2    
-            v[2]=j*u"mas"
-            M=re(v)
-            if interferometry_fourier(M,uv)==donnees
-                return M
+    I=length(intervalle)
+    img = zeros(Float64, I, I)
+    T=Vector{Float64}()
+    for x in intervalle
+        v[1]=x*u"mas"
+        t=0s
+        for y in intervalle   
+            v[2]=y*u"mas"
+                for R in 1:I/2
+                v[3]=R*u"mas"
+                M=re(v)
+                t=sum(abs2,interferometry_fourier(M,uv).-donnees)
+                push!(T,t)
             end
         end
     end
-    return "L'objet ne se trouve pas dans la plage de position implémentée"
+    for idx in eachindex(img)
+        img[idx]=T[idx]
+    end
+    return img
 end
-    
+ =#
+
+function stripeunits(x::Quantity)
+    ustrip(upreferred(x))
+end

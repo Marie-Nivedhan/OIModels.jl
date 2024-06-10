@@ -1,13 +1,19 @@
 module OIModels
 
-using Unitful
-using UnitfulAngles
-using NFFT
-using SpecialFunctions,
+using Unitful,
+    UnitfulAngles,
+    NFFT,
+    SpecialFunctions,
     Functors,
     Optimisers,
+    Optim,
     ArrayTools,
-    Zygote
+    Zygote,
+    Turing,
+    StatsPlots,
+    Distributions,
+    ForwardDiff,
+    OptimPackNextGen
 
 export Model,
            Star,
@@ -20,7 +26,10 @@ export Model,
            imagingdata,
            imagingxy,
            imaginguv,
-           findobject
+           findimgmcmc,
+           findimg,
+           findobj,
+           stripeunits
            
 
 abstract type Model
@@ -62,9 +71,9 @@ Star(x,y) = Star([x,y])
     vector that contains the results of the normalized fourier transform
 """
 function interferometry_fourier(M::Star,u,v)
-    uu=u.|>u"mas^-1"
-    vv=v.|>u"mas^-1"
-    x,y = M.position
+    uu=stripeunits.(u.|>u"mas^-1")
+    vv=stripeunits.(v.|>u"mas^-1")
+    x,y = stripeunits.(M.position.|>u"mas")
     F=exp.(-im*2*π*(uu*x.+vv*y))
     F0=1
     return F./F0
@@ -136,12 +145,12 @@ Disk(x,y,R) = Disk([x,y],[R])
 """
 function interferometry_fourier(M::Disk,u,v)
 
-    x,y = (M.position.|>u"mas".*u"mas^-1").|>NoUnits
-    R=(M.Radius.|>u"mas".*u"mas^-1").|>NoUnits
-    uu::Matrix{<:Float64} = (u.|>u"mas^-1".*u"mas").|>NoUnits
-    vv::Matrix{<:Float64} = (v.|>u"mas^-1".*u"mas").|>NoUnits
+    x,y = M.position.|>u"mas"
+    R=M.Radius.|>u"mas"
+    uu=u.|>u"mas^-1"
+    vv=v.|>u"mas^-1"
     ρ=sqrt.(uu.^2 .+ vv.^2) 
-    F::Matrix{<:Complex{Float64}} = zeros(Complex{Float64}, size(uu)...)
+    F= zeros(Complex{Float64}, size(uu)...)
     for idx in eachindex(uu)
         if ρ[idx]==0
             F[idx]=1 #bessel cardinal =1/2 when x->0
@@ -425,19 +434,3 @@ include("OIModelsfunction.jl")
 
 end # module OIModels
 
-
-
-"mm=Star2(-75.,75.)
-v, re = destructure(mm)
-donnees = interferometry_fourier(mm,uv[2])
-f(v) = 
-f(v)
-f'(v)
-f(1)
-f(flat) = sum(abs2.(interferometry_fourier(re(flat),uv[2]).-donnees))
-f(flat)
-f'(flat)
-f(flat)
-f'(flat)
-d(v)=interferometry_fourier(re(v),uv[2]).-donnees
-f(d) = sum(abs2,d)"
