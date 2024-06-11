@@ -13,7 +13,8 @@ using Unitful,
     StatsPlots,
     Distributions,
     ForwardDiff,
-    OptimPackNextGen
+    OptimPackNextGen,
+    LinearAlgebra
 
 export Model,
            Star,
@@ -29,6 +30,7 @@ export Model,
            findimgmcmc,
            findimg,
            findobj,
+           findmodelmcmc,
            stripeunits
            
 
@@ -71,12 +73,11 @@ Star(x,y) = Star([x,y])
     vector that contains the results of the normalized fourier transform
 """
 function interferometry_fourier(M::Star,u,v)
-    uu=stripeunits.(u.|>u"mas^-1")
-    vv=stripeunits.(v.|>u"mas^-1")
-    x,y = stripeunits.(M.position.|>u"mas")
+    uu=stripeunits.(u)
+    vv=stripeunits.(v)
+    x,y = stripeunits.(M.position)
     F=exp.(-im*2*π*(uu*x.+vv*y))
-    F0=1
-    return F./F0
+    return F
 
 end
 
@@ -145,19 +146,19 @@ Disk(x,y,R) = Disk([x,y],[R])
 """
 function interferometry_fourier(M::Disk,u,v)
 
-    x,y = M.position.|>u"mas"
-    R=M.Radius.|>u"mas"
-    uu=u.|>u"mas^-1"
-    vv=v.|>u"mas^-1"
-    ρ=sqrt.(uu.^2 .+ vv.^2) 
+    x,y = stripeunits.(M.position)
+    R=stripeunits.(M.Radius[1])
+    uu=stripeunits.(u)
+    vv=stripeunits.(v)
+    ρ=stripeunits.(sqrt.(uu.^2 .+ vv.^2))
     F= zeros(Complex{Float64}, size(uu)...)
     for idx in eachindex(uu)
         if ρ[idx]==0
             F[idx]=1 #bessel cardinal =1/2 when x->0
         else
-            F[idx]=2 * besselj1(2*π*R[1]*ρ[idx]) / 
-                    (2*π*R[1]*ρ[idx]) *
-                    exp.(-im*2*π*(uu[idx]*x+vv[idx]*y))# la phase 
+            F[idx]=2 * besselj1(2*π*R*ρ[idx]) / 
+                    (2*π*R*ρ[idx]) *
+                    exp(-im*2*π*(uu[idx]*x+vv[idx]*y))# la phase 
         end
     end
     F0=1 
@@ -192,7 +193,7 @@ function interferometry_image(M::Disk,x,y;atol=0.5)
     Mx,My=M.position
     MR=M.Radius[1]
     f=Float64.(sqrt.((y .- My).^2+(x .- Mx).^2).<MR)
-    f0=π*(MR*(u"mas^-1"))^2
+    f0=π*(MR)^2
     return f./f0
 
 end
@@ -230,10 +231,10 @@ Gauss(x,y,R) = Gauss([x,y],[R])
 """
 function interferometry_fourier(M::Gauss,u,v)
 
-    x,y = M.position
-    R=M.Radius[1]
-    uu=u.|>u"mas^-1"
-    vv=v.|>u"mas^-1"
+    x,y = stripeunits.(M.position)
+    R=stripeunits.(M.Radius[1])
+    uu=stripeunits.(u)
+    vv=stripeunits.(v)
     ρ=(uu.^2 .+ vv.^2) 
     F=exp.(-((π*R)^2 .*ρ)./ 4*log(2)).* exp.(-im*2*π*(uu.*x.+vv.*y))
     F0=1
@@ -268,7 +269,7 @@ function interferometry_image(M::Gauss,x,y;atol=0.5)
     Mx,My = M.position
     R=M.Radius[1]
     f=exp.(-4*log(2).*((x.-Mx).^2 .+(y.-My).^2) ./R^2)
-    f0=(π*(R*u"mas^-1")^2)/(4*log(2))
+    f0=(π*(R)^2)/(4*log(2))
     return f./f0
 
 end
@@ -282,7 +283,7 @@ struct Ring{T} <: Model
     Radius::T 
 end
 @functor Ring
-Ring(x,y,R) = Ring([x,y],[R])
+Ring(x,y,R1,R2) = Ring([x,y],[R1,R2])
 ##Functions for model Ring
 
 #Definition interferometry_fourier(M::Ring,u,v)
@@ -306,15 +307,21 @@ Ring(x,y,R) = Ring([x,y],[R])
 """
 function interferometry_fourier(M::Ring,u,v)
 
-    x,y = M.position
-    R=M.Radius[1]
-    uu=u.|>u"mas^-1"
-    vv=v.|>u"mas^-1"
-    ρ=((uu.^2 .+ vv.^2).*u"mas^2").|>NoUnits 
-    R=(R*u"mas^-1").|>NoUnits 
-    F=(besselj0.((2*π*ρ*R))).*
-            exp.(-im*2*π*(uu.*x+vv.*y))
-    F0=(besselj0((0)))
+    x,y = stripeunits.(M.position)
+    R1=stripeunits.(M.Radius[1])
+    R2=stripeunits.(M.Radius[2])
+    uu=stripeunits.(u)
+    vv=stripeunits.(v)
+    ρ=stripeunits.(sqrt.(uu.^2 .+ vv.^2))
+    F= zeros(Complex{Float64}, size(uu)...)
+    for idx in eachindex(uu)
+        if ρ[idx]==0
+            F[idx]=π * (R2^2 - R1^2)
+        else
+            F[idx]=(R2*besselj1(ρ[idx]*2*π*R2)-R1*besselj1(ρ[idx]*2*π*R1))*exp(-im*2*π*(uu[idx]*x+vv[idx]*y))/ρ[idx]
+        end
+    end
+    F0=π * (R2^2 - R1^2)
     return F./F0
 
 end
@@ -344,9 +351,10 @@ end
 function interferometry_image(M::Ring,x,y;atol=0.5)
     
     Mx,My = M.position
-    R=M.Radius[1]
-    f=Float64.(isapprox.(sqrt.((y .- My).^2+(x .- Mx).^2),R,atol=atol))
-    f0=2*π*(R*(u"mas^-1"))
+    R1=M.Radius[1]
+    R2=M.Radius[2]
+    f=Float64.(sqrt.((y .- My).^2+(x .- Mx).^2).<R2 .&& sqrt.((y .- My).^2+(x .- Mx).^2).>R1 )
+    f0=π * (R2^2 - R1^2)
     return f./f0
 
 end
