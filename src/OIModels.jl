@@ -188,12 +188,12 @@ end
     result : Float64
     This float is either 1 or 0 is the conversion of the booleen that compares the experiment to the model
 """
-function interferometry_image(M::Disk,x,y;atol=0.5)
+function interferometry_image(M::Disk,x,y;atol=0.5) 
     
     Mx,My=M.position
     MR=M.Radius[1]
     f=Float64.(sqrt.((y .- My).^2+(x .- Mx).^2).<MR)
-    f0=π*(MR)^2
+    f0=π*(MR*u"mas^-1"|>NoUnits)^2
     return f./f0
 
 end
@@ -269,7 +269,7 @@ function interferometry_image(M::Gauss,x,y;atol=0.5)
     Mx,My = M.position
     R=M.Radius[1]
     f=exp.(-4*log(2).*((x.-Mx).^2 .+(y.-My).^2) ./R^2)
-    f0=(π*(R)^2)/(4*log(2))
+    f0=(π*(R*u"mas^-1"|>NoUnits)^2)/(4*log(2))
     return f./f0
 
 end
@@ -351,10 +351,15 @@ end
 function interferometry_image(M::Ring,x,y;atol=0.5)
     
     Mx,My = M.position
-    R1=M.Radius[1]
-    R2=M.Radius[2]
-    f=Float64.(sqrt.((y .- My).^2+(x .- Mx).^2).<R2 .&& sqrt.((y .- My).^2+(x .- Mx).^2).>R1 )
-    f0=π * (R2^2 - R1^2)
+    if M.Radius[1]<M.Radius[2]
+        R1 = M.Radius[1]
+        R2 = M.Radius[2]
+    else
+        R1 = M.Radius[2]
+        R2 = M.Radius[1]
+    end      
+    f = Float64.(sqrt.((y .- My).^2+(x .- Mx).^2).<R2 .&& sqrt.((y .- My).^2+(x .- Mx).^2).>R1 )
+    f0 = π * (R2^2 - R1^2)*u"mas^-2"|>NoUnits
     return f./f0
 
 end
