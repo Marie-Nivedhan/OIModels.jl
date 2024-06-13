@@ -177,87 +177,41 @@ end
 stripeunits(x) =x
 
 stripeunits(x::Model)= fmap(stripeunits,x)
+function findgraph(M::Star,data,range,uv) # ~1 min
+    f(x) = sum(abs2.(interferometry_fourier(Star([x[1],x[2]]), uv) .- data))
+    # Génération de données pour le tracé
+    x = y = range.*u"mas"
+    z = [f([a, b]) for a in x, b in y]
 
-function findmodelmcmc(M::Star,tabuv,donnees,iteration)
-    # Prepare the data for Turing
-    d = hcat(real.(donnees), imag.(donnees))[:]
 
-    # Calculate the standard deviation of the observed data
-    obs_std = std(d)
-
-    # Définir le modèle Turing
-
-    @model function gdemo(obs,uv,obs_std)
-
-        x ~ Uniform(-127.0, 128.0)  # Likelihood
-        y ~ Uniform(-127.0, 128.0) #Normal(s, sigma) 
-        # Simulez les données en utilisant la fonction interferometry_fourier
-        model_data = interferometry_fourier(Star(x*1u"mas", y*1u"mas"), uv)
-        model_data =hcat(real.(model_data),imag.(model_data))[:]
-        
-        # Vraisemblance 
-        obs ~ MvNormal(model_data,obs_std^2 * I)
-
-    end
-    
-    chain = sample(gdemo(d,tabuv,obs_std), MH(), iteration)#iteration=100000 c'est bon
-    # Extraire les échantillons de x et y
-    x_samples = chain[:x]
-    y_samples = chain[:y]
-
-    x_values = sample(x_samples)
-    y_values = sample(y_samples)
-    # Trouver les valeurs les plus probables (pics) de x et y
-    x_peak = mode(x_values)
-    y_peak = mode(y_values)
-
-    M=Star(x_peak*u"mas",y_peak*u"mas")
+    # Trouver les indices du minimum de z
+    min_index = argmin(z)
+    min_x, min_y = x[min_index[1]], y[min_index[2]]
+    min_z = minimum(z)
+    println(min_z)
+    M=Star([min_x, min_y])
     return M
 end
 
-function findmodelmcmc(M::Disk,tabuv,donnees,iteration)#iteration =2000000 ça fonctionne mais ~15 min
-    # Prepare the data for Turing
-    d = hcat(real.(donnees), imag.(donnees))[:]
+function findgraph(M::Disk,data,range,uv) # ~1 min
+    f(x) = sum(abs2.(interferometry_fourier(Disk([x[1]],[x[2]]), uv) .- data))
+    # Génération de données pour le tracé
+    x = y = range.*u"mas"
+    R=(0:step(range):last(range)).*u"mas"
+    z = [f([[a, b],[c]]) for a in x, b in y,c in R]
 
-    # Calculate the standard deviation of the observed data
-    obs_std = std(d)
 
-    # Définir le modèle Turing
-
-    @model function gdemo(obs,uv,obs_std)
-
-        x ~ Uniform(-127.0, 128.0)  # Likelihood
-        y ~ Uniform(-127.0, 128.0) #Normal(s, sigma) 
-        R ~ Uniform(0.0, 128.0)
-        # Simulez les données en utilisant la fonction interferometry_fourier
-        model_data = interferometry_fourier(Disk(x*1u"mas", y*1u"mas",R*1u"mas"), uv)
-        model_data =hcat(real.(model_data),imag.(model_data))[:]
-        
-        # Vraisemblance 
-        obs ~ MvNormal(model_data,obs_std^2 * I)
-
-    end
-    
-    chain = sample(gdemo(d,tabuv,obs_std),MH(), iteration)
-    
-    # Extraire les échantillons de x et y
-    x_samples = chain[:x]
-    y_samples = chain[:y]
-    R_samples = chain[:R]
-
-    x_values = sample(x_samples)
-    y_values = sample(y_samples)
-    R_values = sample(R_samples)
-    # Trouver les valeurs les plus probables (pics) de x et y
-    x_peak = mode(x_values)
-    y_peak = mode(y_values)
-    R_peak = mode(R_values)
-
-    M=Disk(x_peak*u"mas",y_peak*u"mas",R_peak*u"mas")
+    # Trouver les indices du minimum de z
+    min_index = argmin(z)
+    min_x, min_y, min_R= x[min_index[1]], y[min_index[2]],R[min_index[3]]
+    min_z = minimum(z)
+    println(min_z)
+    M=Star([min_x, min_y],[min_R])
     return M
 end
 
-function findmodelmcmc(M::Gauss,tabuv,donnees,iteration)#iteration =2000000 ça fonctionne mais ~10 min
+
+function findmodelmcmc(M::Model,tabuv,donnees,iteration)
     # Prepare the data for Turing
     d = hcat(real.(donnees), imag.(donnees))[:]
 
@@ -265,83 +219,136 @@ function findmodelmcmc(M::Gauss,tabuv,donnees,iteration)#iteration =2000000 ça 
     obs_std = std(d)
 
     # Définir le modèle Turing
+    if M isa Star
+        @model function gdemostar(obs,uv,obs_std)
 
-    @model function gdemo(obs,uv,obs_std)
-
-        x ~ Uniform(-127.0, 128.0)  # Likelihood
-        y ~ Uniform(-127.0, 128.0) #Normal(s, sigma) 
-        R ~ Uniform(0.0, 128.0)
-        # Simulez les données en utilisant la fonction interferometry_fourier
-        model_data = interferometry_fourier(Gauss(x*1u"mas", y*1u"mas",R*1u"mas"), uv)
-        model_data =hcat(real.(model_data),imag.(model_data))[:]
+            x ~ Uniform(-127.0, 128.0)  # Likelihood
+            y ~ Uniform(-127.0, 128.0) #Normal(s, sigma) 
+            # Simulez les données en utilisant la fonction interferometry_fourier
+            model_data = interferometry_fourier(Star(x*1u"mas", y*1u"mas"), uv)
+            model_data =hcat(real.(model_data),imag.(model_data))[:]
+            
+            # Vraisemblance 
+            obs ~ MvNormal(model_data,obs_std^2 * I)
+    
+        end
         
-        # Vraisemblance 
-        obs ~ MvNormal(model_data,obs_std^2 * I)
-
-    end
+        chain = sample(gdemostar(d,tabuv,obs_std), MH(), iteration)#iteration=100000 c'est bon +-2
+        # Extraire les échantillons de x et y
+        x_samples = chain[:x]
+        y_samples = chain[:y]
     
-    chain = sample(gdemo(d,tabuv,obs_std),MH(), iteration)
+        x_values = sample(x_samples)
+        y_values = sample(y_samples)
+        # Trouver les valeurs les plus probables (pics) de x et y
+        x_peak = mode(x_values)
+        y_peak = mode(y_values)
     
-    # Extraire les échantillons de x et y
-    x_samples = chain[:x]
-    y_samples = chain[:y]
-    R_samples = chain[:R]
+        M=Star(x_peak*u"mas",y_peak*u"mas")
+        return M
 
-    x_values = sample(x_samples)
-    y_values = sample(y_samples)
-    R_values = sample(R_samples)
-    # Trouver les valeurs les plus probables (pics) de x et y
-    x_peak = mode(x_values)
-    y_peak = mode(y_values)
-    R_peak = mode(R_values)
+    elseif  M isa Disk
+        @model function gdemodisk(obs,uv,obs_std)
 
-    M=Gauss(x_peak*u"mas",y_peak*u"mas",R_peak*u"mas")
-    return M
-end
-
-function findmodelmcmc(M::Ring,tabuv,donnees,iteration)#iteration =4000000 ça fonctionne mais ~40 min
-    # Prepare the data for Turing
-    d = hcat(real.(donnees), imag.(donnees))[:]
-
-    # Calculate the standard deviation of the observed data
-    obs_std = std(d)
-
-    # Définir le modèle Turing
-
-    @model function gdemo(obs,uv,obs_std)
-
-        x ~ Uniform(-127.0, 128.0)  # Likelihood
-        y ~ Uniform(-127.0, 128.0) #Normal(s, sigma) 
-        R1 ~ Uniform(0.0, 128.0)
-        R2 ~ Uniform(0.0, 128.0)
-        # Simulez les données en utilisant la fonction interferometry_fourier
-        model_data = interferometry_fourier(Ring(x*1u"mas", y*1u"mas",R1*1u"mas",R2*1u"mas"), uv)
-        model_data =hcat(real.(model_data),imag.(model_data))[:]
+            x ~ Uniform(-127.0, 128.0)  # Likelihood
+            y ~ Uniform(-127.0, 128.0) #Normal(s, sigma) 
+            R ~ Uniform(0.0, 128.0)
+            # Simulez les données en utilisant la fonction interferometry_fourier
+            model_data = interferometry_fourier(Disk(x*1u"mas", y*1u"mas",R*1u"mas"), uv)
+            model_data =hcat(real.(model_data),imag.(model_data))[:]
+            
+            # Vraisemblance 
+            obs ~ MvNormal(model_data,obs_std^2 * I)
+    
+        end
         
-        # Vraisemblance 
-        obs ~ MvNormal(model_data,obs_std^2 * I)
+        chain = sample(gdemodisk(d,tabuv,obs_std),MH(), iteration)
+        
+        # Extraire les échantillons de x et y
+        x_samples = chain[:x]
+        y_samples = chain[:y]
+        R_samples = chain[:R]
+    
+        x_values = sample(x_samples)
+        y_values = sample(y_samples)
+        R_values = sample(R_samples)
+        # Trouver les valeurs les plus probables (pics) de x et y
+        x_peak = mode(x_values)
+        y_peak = mode(y_values)
+        R_peak = mode(R_values)
+    
+        M=Disk(x_peak*u"mas",y_peak*u"mas",R_peak*u"mas")
+        return M
 
+    elseif M isa Gauss
+        @model function gdemogauss(obs,uv,obs_std)
+
+            x ~ Uniform(-127.0, 128.0)  # Likelihood
+            y ~ Uniform(-127.0, 128.0) #Normal(s, sigma) 
+            R ~ Uniform(0.0, 128.0)
+            # Simulez les données en utilisant la fonction interferometry_fourier
+            model_data = interferometry_fourier(Gauss(x*1u"mas", y*1u"mas",R*1u"mas"), uv)
+            model_data =hcat(real.(model_data),imag.(model_data))[:]
+            
+            # Vraisemblance 
+            obs ~ MvNormal(model_data,obs_std^2 * I)
+    
+        end
+        
+        chain = sample(gdemogauss(d,tabuv,obs_std),MH(), iteration)#iteration =2000000 ça fonctionne mais ~10 min +-2
+        
+        # Extraire les échantillons de x et y
+        x_samples = chain[:x]
+        y_samples = chain[:y]
+        R_samples = chain[:R]
+    
+        x_values = sample(x_samples)
+        y_values = sample(y_samples)
+        R_values = sample(R_samples)
+        # Trouver les valeurs les plus probables (pics) de x et y
+        x_peak = mode(x_values)
+        y_peak = mode(y_values)
+        R_peak = mode(R_values)
+    
+        M=Gauss(x_peak*u"mas",y_peak*u"mas",R_peak*u"mas")
+        return M
+
+    elseif M isa Ring
+        @model function gdemoring(obs,uv,obs_std)
+
+            x ~ Uniform(-127.0, 128.0)  # Likelihood
+            y ~ Uniform(-127.0, 128.0) #Normal(s, sigma) 
+            R1 ~ Uniform(0.0, 128.0)
+            R2 ~ Uniform(0.0, 128.0)
+            # Simulez les données en utilisant la fonction interferometry_fourier
+            model_data = interferometry_fourier(Ring(x*1u"mas", y*1u"mas",R1*1u"mas",R2*1u"mas"), uv)
+            model_data =hcat(real.(model_data),imag.(model_data))[:]
+            
+            # Vraisemblance 
+            obs ~ MvNormal(model_data,obs_std^2 * I)
+    
+        end
+        
+        chain = sample(gdemoring(d,tabuv,obs_std),MH(), iteration)
+        
+        # Extraire les échantillons de x et y
+        x_samples = chain[:x]
+        y_samples = chain[:y]
+        R1_samples = chain[:R1]
+        R2_samples = chain[:R2]
+    
+        x_values = sample(x_samples)
+        y_values = sample(y_samples)
+        R1_values = sample(R1_samples)
+        R2_values = sample(R2_samples)
+    
+        # Trouver les valeurs les plus probables (pics) de x et y
+        x_peak = mode(x_values)
+        y_peak = mode(y_values)
+        R1_peak = mode(R1_values)
+        R2_peak = mode(R2_values)
+    
+        M=Ring(x_peak*u"mas",y_peak*u"mas",R1_peak*u"mas",R2_peak*u"mas")
+        return M
     end
-    
-    chain = sample(gdemo(d,tabuv,obs_std),MH(), iteration)
-    
-    # Extraire les échantillons de x et y
-    x_samples = chain[:x]
-    y_samples = chain[:y]
-    R1_samples = chain[:R1]
-    R2_samples = chain[:R2]
-
-    x_values = sample(x_samples)
-    y_values = sample(y_samples)
-    R1_values = sample(R1_samples)
-    R2_values = sample(R2_samples)
-
-    # Trouver les valeurs les plus probables (pics) de x et y
-    x_peak = mode(x_values)
-    y_peak = mode(y_values)
-    R1_peak = mode(R1_values)
-    R2_peak = mode(R2_values)
-
-    M=Ring(x_peak*u"mas",y_peak*u"mas",R1_peak*u"mas",R2_peak*u"mas")
-    return M
 end

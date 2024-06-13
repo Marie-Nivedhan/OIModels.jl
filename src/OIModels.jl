@@ -14,6 +14,8 @@ using Unitful,
     Distributions,
     ForwardDiff,
     OptimPackNextGen,
+    BlackBoxOptim,
+    SimulatedAnnealing,
     LinearAlgebra
 
 export Model,
@@ -31,6 +33,7 @@ export Model,
            findimg,
            findobj,
            findmodelmcmc,
+           findgraph,
            stripeunits
            
 
@@ -202,12 +205,12 @@ end
 ##############################################
 
 ###Definition of subtype Gauss, defined by his space coordinates of his center ('x','y') and his full width at half maximum 'R'
-struct Gauss{T} <: Model
+struct Gauss{T,S} <: Model
 	position::T 
-    Radius::T 
+    Radius::S 
 end
 @functor Gauss
-Gauss(x,y,R) = Gauss([x,y],[R])
+Gauss(x, y, R) = Gauss([x,y],[R])
 ##Functions for model Gauss
 
 #Definition interferometry_fourier(M::Gauss,u,v)
@@ -308,8 +311,15 @@ Ring(x,y,R1,R2) = Ring([x,y],[R1,R2])
 function interferometry_fourier(M::Ring,u,v)
 
     x,y = stripeunits.(M.position)
-    R1=stripeunits.(M.Radius[1])
-    R2=stripeunits.(M.Radius[2])
+    if M.Radius[1]<M.Radius[2]
+        R1 = M.Radius[1]
+        R2 = M.Radius[2]
+    else
+        R1 = M.Radius[2]
+        R2 = M.Radius[1]
+    end      
+    R1=stripeunits.(R1)
+    R2=stripeunits.(R2)
     uu=stripeunits.(u)
     vv=stripeunits.(v)
     ρ=stripeunits.(sqrt.(uu.^2 .+ vv.^2))
