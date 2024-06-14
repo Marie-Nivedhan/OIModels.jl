@@ -6,7 +6,7 @@ using Unitful,
     SpecialFunctions,
     Functors,
     Optimization,
-    Metaheuristics,
+    Optim,
     ArrayTools,
     Zygote,
     Turing,
@@ -30,6 +30,7 @@ export Model,
            findimg,
            findobj,
            findmodelmcmc,
+           findmodeloptim,
            findgraph,
            stripeunits
            
@@ -73,9 +74,9 @@ Star(x,y) = Star([x,y])
     vector that contains the results of the normalized fourier transform
 """
 function interferometry_fourier(M::Star,u,v)
-    uu=stripeunits.(u)
-    vv=stripeunits.(v)
-    x,y = stripeunits.(M.position)
+    uu=stripeunits(u)
+    vv=stripeunits(v)
+    x,y = stripeunits(M.position)
     F=exp.(-im*2*π*(uu*x.+vv*y))
     return F
 
@@ -150,7 +151,7 @@ function interferometry_fourier(M::Disk,u,v)
     R=stripeunits.(M.Radius[1])
     uu=stripeunits.(u)
     vv=stripeunits.(v)
-    ρ=stripeunits.(sqrt.(uu.^2 .+ vv.^2))
+    ρ=sqrt.(uu.^2 .+ vv.^2)
     F= zeros(Complex{Float64}, size(uu)...)
     for idx in eachindex(uu)
         if ρ[idx]==0
@@ -277,7 +278,7 @@ end
 
 ###############################################
 
-###Definition of subtype Ring, defined by his space coordinates of his center ('x','y') and his full width at half maximum 'R'
+###Definition of subtype Ring, defined by his space coordinates of his center ('x','y') and his internal and external radiuses 'R1' 'R2'
 struct Ring{T} <: Model
 	position::T 
     Radius::T 
