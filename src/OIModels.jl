@@ -31,7 +31,6 @@ export Model,
            findobj,
            findmodelmcmc,
            findmodeloptim,
-           findgraph,
            stripeunits
            
 
@@ -454,4 +453,5 @@ end
 include("OIModelsfunction.jl")
 
 end # module OIModels
+
 
