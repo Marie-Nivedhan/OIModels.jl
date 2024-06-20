@@ -516,7 +516,7 @@ function findmodeloptim(M::Star,range,data,tabuv) # advised range =-127.0:8.0:12
                 minimizer = opt_result.minimizer
 
                 # Check if minimum value is zero (indicating a good fit)
-                if global_min==0.0
+                if isapprox(global_min,0.0; atol=5)
                     return Star(minimizer.*u"mas")
                 end
         end
@@ -540,7 +540,7 @@ function findmodeloptim(M::Gauss,range,data,tabuv) # advised range =-127.0:64.0:
        using optimize with the LBFGS() method =#
     for i in range
         for j in range
-            for k in 0.0:step(range):last(range)
+            for k in 0.0:step(range)*2:last(range)
                 x0 = [i,j,k]
                 # Optimization using LBFGS method
                 opt_result = optimize(b -> f(b, data,tabuv), x0,LBFGS(); autodiff = :forward)
@@ -563,21 +563,21 @@ function findmodeloptim(M::Ring,range,data,tabuv) # advised range =-127.0:8.0:12
     # Objective function f(b) to minimize
     #= Defines f(b) to compute the sum of squared differences between observed data and model predictions (interferometry_fourier) 
     for a Ring model with parameters b. =#
-        function objf(b, donnees)
-            x = b[1]u"mas"
-            y = b[2]u"mas"
-            R1 = b[3]u"mas"
-            R2 = b[4]u"mas"
-            sum(abs2, interferometry_fourier(Ring(x, y,R1,R2), uv2) .- donnees)
-        end
+    function f(b, donnees,uv)
+        x = b[1]u"mas"
+        y = b[2]u"mas"
+        R1 = b[3]u"mas"
+        R2 = b[4]u"mas"
+        sum(abs2, interferometry_fourier(Ring(x, y, R1, R2), uv) .- donnees)
+    end        
 
     # Loop over each optimization method
     #= Iterates over the range of initial values for x and y. For each combination, it initializes x0 and performs optimization
        using optimize with the LBFGS() method =#
-    for i in range
-        for j in range
-            for k in 0.0:step(range):last(range)
-                for l in 0.0:step(range):last(range)
+    for i in -127.0:16.0:128.0
+        for j in -127.0:16.0:128.0
+            for k in 0.0:32.0:128.0
+                for l in 0.0:32.0:128.0
                     x0 = [i,j,k,l]
                     # Optimisation avec la méthode actuelle
                     opt_result = optimize(b -> f(b, data,tabuv), x0,LBFGS())
@@ -588,7 +588,7 @@ function findmodeloptim(M::Ring,range,data,tabuv) # advised range =-127.0:8.0:12
 
                     # Uses isapprox(global_min, 0.0; atol=0.5) to determine if the optimization successfully minimized the objective function
                     if isapprox(global_min,0.0; atol=0.5)
-                        return Disk(minimizer[1].*u"mas",minimizer[2].*u"mas",minimizer[3].*u"mas",minimizer[4].*u"mas")
+                        return Ring(minimizer[1]*u"mas",minimizer[2]*u"mas",minimizer[3]*u"mas",minimizer[4]*u"mas")
                     end
                 end
             end
@@ -608,15 +608,12 @@ function findmodeloptim(M::Disk,range,data,tabuv) # advised range =-127.0:8.0:12
         R = b[3]u"mas"
         sum(abs2, interferometry_fourier(Disk([x, y],[R]), uv) .- donnees)
     end
-
-        
-
     # Loop over each optimization method
     #= Iterates over the range of initial values for x and y. For each combination, it initializes x0 and performs optimization
        using optimize with the LBFGS() method =#
     for i in range
         for j in range
-            for k in 0.0:step(range):last(range)
+            for k in 0.0:step(range)*2:last(range)
                 x0 = [i,j,k]
                 # Optimization using LBFGS method without autodiff
                 opt_result = optimize(b -> f(b, data,tabuv), x0,LBFGS())
